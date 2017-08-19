@@ -43,12 +43,12 @@ def getTrainData(hogDesc, positiveSamplesPath, negSamplesPath):
 
 # train SVM for the first time
 def trainInitialSVM():
-    train_data, labels = getTrainData(hog, ".\/train\pos\*.jpg", ".\/train\/neg\*.jpg")
+    train_data, labels = getTrainData(hog, ".\/img\pos\*.jpg", ".\/img\/neg\*.jpg")
     mean_input = np.mean(train_data, axis=0).reshape(1, -1)
     # print(mean_input.shape)
     mean, eigenvectors = cv2.PCACompute(train_data, mean_input, cv2.PCA_DATA_AS_ROW, 512)
     # np.save("./hog_descriptors", train_data)
-    # np.save("./labels", labels)
+    np.save("./labels", labels)
     np.save("./pca_eigenvectors", eigenvectors)
     # np.save("./pca_mean", mean)
     # train_data = np.load("./hog_descriptors.npy")
@@ -56,13 +56,13 @@ def trainInitialSVM():
     # eigenvectors = np.load("./pca_eigenvectors.npy")
     # mean = np.load("./pca_mean.npy")
     projection = cv2.PCAProject(train_data, mean, eigenvectors)
-    print(projection)
-    svm = cv2.ml.SVM_create()
-    svm.setKernel(cv2.ml.SVM_LINEAR)
-    svm.setType(cv2.ml.SVM_C_SVC)
-    svm.setC(0.5)
-    svm.train(train_data, cv2.ml.ROW_SAMPLE, labels)
-    svm.save("svm.xml")
+    np.save('./pca_projection', projection)
+    # svm = cv2.ml.SVM_create()
+    # svm.setKernel(cv2.ml.SVM_LINEAR)
+    # svm.setType(cv2.ml.SVM_C_SVC)
+    # svm.setC(0.5)
+    # svm.train(train_data, cv2.ml.ROW_SAMPLE, labels)
+    # svm.save("svm.xml")
 
 
 def createTrainImages():
