@@ -1,18 +1,30 @@
 import argparse
+import re
+
 import numpy as np
 import cv2
-import math
-import matplotlib.pyplot as plt
+import pickle
 
 import SVMClassifier
-import helpers
+
+import xml.etree.ElementTree as ET
+
+tree = ET.parse('./svm.xml')
+root = tree.getroot()
+
+SVs = root.getchildren()[0].getchildren()[-2].getchildren()[0]
+rho = float(root.getchildren()[0].getchildren()[-1].getchildren()[0].getchildren()[1].text)
+svmvec = [float(x) for x in re.sub('\s+', ' ', SVs.text ).strip().split(' ')]
+svmvec.append(-rho)
+pickle.dump(svmvec, open("svm.pickle", 'w'))
+svm_detector = pickle.load(open("svm.pickle"))
 
 hog = cv2.HOGDescriptor()
-hog.setSVMDetector(cv2.ml.SVM_load(".\svm.xml"))
+hog.setSVMDetector(np.array(svm_detector))
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-v", "--video", help="path to the video file")
-ap.add_argument("-a", "--min-area", type=int, default=2000, help="minimum area size")
+ap.add_argument("-a", "--min-area", type=int, default=1000, help="minimum area size")
 args = vars(ap.parse_args())
 
 cap = cv2.VideoCapture(args["video"])
@@ -62,22 +74,24 @@ while True:
         TARGET_PIXEL_AREA = 100000.0
 
         ratio = float(crop_img.shape[1]) / float(crop_img.shape[0])
-        if ratio >= 1:
-            continue
+        # if ratio >= 1:
+        #     continue
 
         # new_h = int(np.math.sqrt(TARGET_PIXEL_AREA / ratio) + 0.5)
         # new_w = int((new_h * ratio) + 0.5)
 
         crop_img = cv2.resize(crop_img, (64, 128))
-
-        descriptor = hog.compute(crop_img)
-        rows, cols = descriptor.shape
-        descriptor = descriptor.reshape((cols, rows))
-        descriptor = SVMClassifier.projectData(descriptor)
-        prediction = svm.predict(descriptor)
-        if prediction[1] == 0:
+        found, descriptor = hog.detect(crop_img)
+        print(found)
+        print(descriptor)
+        # rows, cols = descriptor.shape
+        # print(descriptor.shape)
+        # descriptor = descriptor.reshape((cols, rows))
+        # descriptor = SVMClassifier.projectData(descriptor)
+        # prediction = svm.predict(descriptor)
+        if found is not None:
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        rows, cols = crop_img.shape[:2]
+        # rows, cols = crop_img.shape[:2]
 
 #         crop_img = cv2.flip(crop_img, 1)
 #         rot_matrix = cv2.getRotationMatrix2D((cols/2, rows/2), 180, 1)
