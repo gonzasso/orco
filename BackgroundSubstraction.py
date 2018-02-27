@@ -3,24 +3,60 @@ import re
 
 import numpy as np
 import cv2
+from imutils.object_detection import non_max_suppression
 import pickle
+import svmlight
 
 import SVMClassifier
 
 import xml.etree.ElementTree as ET
 
-tree = ET.parse('./svm.xml')
-root = tree.getroot()
+# tree = ET.parse('./svm.xml')
+# root = tree.getroot()
+# # for formato in root.iter('data'):
+# #     print(formato.tag)
+# #     print(formato.attrib)
+# #     print(formato.text)
+#
+# # SVs = root.getchildren()[0].getchildren()[-2].getchildren()[0]
+# # print(SVs.text)
 
-SVs = root.getchildren()[0].getchildren()[-2].getchildren()[0]
-rho = float(root.getchildren()[0].getchildren()[-1].getchildren()[0].getchildren()[1].text)
-svmvec = [float(x) for x in re.sub('\s+', ' ', SVs.text ).strip().split(' ')]
-svmvec.append(-rho)
-pickle.dump(svmvec, open("svm.pickle", 'w'))
-svm_detector = pickle.load(open("svm.pickle"))
+# SVs = root.find(".//support_vectors/_")
+# print(SVs.text)
+# rho = float(root.find(".//rho").text)
+# svmvec = []
+# for elem in re.sub('\s+', ' ', SVs.text).strip().split(' '):
+#     print(elem)
+#     svmvec.append(float(elem))
+# svmvec.append(-rho)
+
+# svmvec = [float(re.sub('\s+', ' ', x.text).strip().split(' ')) for x in SVs]
+# svmvec.append(-rho)
+# with open("svm.pickle", 'wb') as handle:
+#     pickle.dump(svmvec, handle)
+# # pickle.dump(svmvec, open("svm.pickle", 'w'))
+# svm_detector = pickle.load(open("svm.pickle"))
+
+# svm_detector = SVMClassifier.trainInitialSVM()
+# model = []
+# with open('.\copy_model.dat') as f:
+#     classifier = f.read()
+#     # model = [float(x) for x in re.sub('\s+', ' ', classifier).strip().split(' ')]
+#     for x in re.sub('\s+', ' ', classifier).strip().split(' '):
+#         value = re.sub('[0-9]+:', '', x)
+#         model.append(float(value))
+#     # model = re.sub(r"\s", "\r\n", classifier)
+#     # for line in f:
+#     #
+#     #     attr = line.replace(" ", "\\r\n")
+#     #     content.append(attr)
+
+# with open("svm.pickle", 'wb') as handle:
+#     pickle.dump(svmvec, handle)
+# svm_detector = pickle.load(open("svm.pickle"))
 
 hog = cv2.HOGDescriptor()
-hog.setSVMDetector(np.array(svm_detector))
+# hog.setSVMDetector(np.array(svm_detector))
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-v", "--video", help="path to the video file")
@@ -33,7 +69,11 @@ fgbg = cv2.createBackgroundSubtractorMOG2(history=10, varThreshold=50, detectSha
 # fgbg = cv2.createBackgroundSubtractorKNN(history=10, dist2Threshold=200, detectShadows=False)
 count = 0
 
-svm = cv2.ml.SVM_load(".\svm.xml")
+# svm = cv2.ml.SVM_load(".\svm.xml")
+# hog_detector = svm.getSupportVectors()
+# rho = svm.getDecisionFunction(0)
+# np.append(hog_detector, rho)
+hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
 
 while True:
     ret, frame = cap.read()
@@ -80,17 +120,28 @@ while True:
         # new_h = int(np.math.sqrt(TARGET_PIXEL_AREA / ratio) + 0.5)
         # new_w = int((new_h * ratio) + 0.5)
 
-        crop_img = cv2.resize(crop_img, (64, 128))
-        found, descriptor = hog.detect(crop_img)
-        print(found)
-        print(descriptor)
+        # crop_img = cv2.resize(crop_img, (64, 128))
+        # crop_img = cv2.resize(crop_img, min(400, crop_img.shape[1]))
+
+        # found, descriptor = hog.detect(crop_img)
+        # descriptor = hog.compute(crop_img)
+        #
         # rows, cols = descriptor.shape
-        # print(descriptor.shape)
         # descriptor = descriptor.reshape((cols, rows))
         # descriptor = SVMClassifier.projectData(descriptor)
-        # prediction = svm.predict(descriptor)
-        if found is not None:
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        # rows, cols = descriptor.shape
+        # rows, cols = descriptor.shape
+        # descriptor = descriptor.reshape((cols, rows))
+        (rects, weights) = hog.detectMultiScale(crop_img, winStride=(4, 4), padding=(8, 8), scale=1.05)
+        rects = np.array([[x, y, x + w, y + h] for (x, y, w, h) in rects])
+        pick = non_max_suppression(rects, probs=None, overlapThresh=0.65)
+        for (xA, yA, xB, yB) in pick:
+            cv2.rectangle(frame, (xA, yA), (xB, yB), (0, 255, 0), 2)
+        # prediction = svm.predict(descriptor)[1]
+
+        # if prediction == 1:
+        #     cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
         # rows, cols = crop_img.shape[:2]
 
 #         crop_img = cv2.flip(crop_img, 1)

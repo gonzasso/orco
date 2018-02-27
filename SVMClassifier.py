@@ -6,6 +6,10 @@ import numpy as np
 import cv2
 import helpers
 import nms
+import svmlight
+import timeit
+import random
+import os.path
 
 hog = cv2.HOGDescriptor()
 
@@ -32,9 +36,11 @@ def getTrainData(hogDesc, positiveSamplesPath, negSamplesPath):
         descriptors = np.vstack((descriptors, descriptor))
 
     labels = np.empty((pos_count + neg_count, 1), np.int32)
-    np.array(labels).fill(1)
-    for i in range(0, neg_count - 1):
+    # TODO chequear limites
+    for i in range(0, neg_count):
         labels[i] = -1
+    for i in range(neg_count, pos_count + neg_count):
+        labels[i] = 1
 
     np.array(descriptors).flatten()
     descriptors = descriptors.reshape((pos_count + neg_count, hog_size))
@@ -43,27 +49,64 @@ def getTrainData(hogDesc, positiveSamplesPath, negSamplesPath):
 
 # train SVM for the first time
 def trainInitialSVM():
-    train_data, labels = getTrainData(hog, ".\/img\pos\*.jpg", ".\/img\/neg\*.jpg")
+    start_time = timeit.default_timer()
+    print ("Calculating hog for training data")
+    train_data, labels = getTrainData(hog, ".\/res\img_inria_pos\*", ".\/res\img_inria_neg\*")
     mean_input = np.mean(train_data, axis=0).reshape(1, -1)
+    elapsed = timeit.default_timer() - start_time
+    print (elapsed)
     # print(mean_input.shape)
+    print ("Calculating PCA")
     mean, eigenvectors = cv2.PCACompute(train_data, mean_input, cv2.PCA_DATA_AS_ROW, 512)
-    # np.save("./hog_descriptors", train_data)
+    np.save("./hog_descriptors", train_data)
     np.save("./labels", labels)
     np.save("./pca_eigenvectors", eigenvectors)
-    # np.save("./pca_mean", mean)
+    np.save("./pca_mean", mean)
     # train_data = np.load("./hog_descriptors.npy")
     # labels = np.load("./labels.npy")
     # eigenvectors = np.load("./pca_eigenvectors.npy")
     # mean = np.load("./pca_mean.npy")
     projection = cv2.PCAProject(train_data, mean, eigenvectors)
+    elapsed = timeit.default_timer() - elapsed
+    print (elapsed)
     np.save('./pca_projection', projection)
-    # svm = cv2.ml.SVM_create()
-    # svm.setKernel(cv2.ml.SVM_LINEAR)
-    # svm.setType(cv2.ml.SVM_C_SVC)
-    # svm.setC(0.5)
-    # svm.train(train_data, cv2.ml.ROW_SAMPLE, labels)
-    # svm.save("svm.xml")
+    print ("Training SVM")
+    svm = cv2.ml.SVM_create()
+    svm.setKernel(cv2.ml.SVM_LINEAR)
+    svm.setType(cv2.ml.SVM_C_SVC)
+    svm.setC(0.5)
+    svm.train(train_data, cv2.ml.ROW_SAMPLE, labels)
+    svm.save("svm.xml")
+    elapsed = timeit.default_timer() - elapsed
+    print(elapsed)
 
+
+# def trainInitialSVM():
+#     train_data, labels = getTrainData(hog, ".\/train\/pos\*.jpg", ".\/train\/neg\*.jpg")
+#     mean_input = np.mean(train_dat    a, axis=0).reshape(1, -1)
+#     # print(mean_input.shape)
+#     mean, eigenvectors = cv2.PCACompute(train_data, mean_input, cv2.PCA_DATA_AS_ROW, 512)
+#     np.save("./hog_descriptors", train_data)
+#     np.save("./labels", labels)
+#     np.save("./pca_eigenvectors", eigenvectors)
+#     np.save("./pca_mean", mean)
+#     # train_data = np.load("./hog_descriptors.npy")
+#     # labels = np.load("./labels.npy")
+#     # eigenvectors = np.load("./pca_eigenvectors.npy")
+#     # mean = np.load("./pca_mean.npy")
+#     projection = cv2.PCAProject(train_data, mean, eigenvectors)
+#     np.save('./pca_projection', projection)
+#     # projection = np.load('./pca_projection.npy')
+#     train = []
+#     for i in range(0, len(labels)-1):
+#         feature = []
+#         descriptor = projection[i]
+#         for j in range(0, len(descriptor)-1):
+#             feature.append((j+1, descriptor[j]))
+#         train.append((labels[i], feature))
+#
+#     model = svmlight.learn(train, type='classification', kernel='linear')
+#     svmlight.write_model(model, 'my_model.dat')
 
 def createTrainImages():
     count = 0
@@ -105,6 +148,37 @@ def hardNegativeMining():
                 print(prediction)
 
 
+# get negative images from inria dataset
+def getNegImages():
+    extensions = ("*.jpg", "*.png")
+    path = "C:\Users\gonza\Downloads\INRIAPerson\Train\/neg\/"
+    files = []
+    for extension in extensions:
+        files.extend(glob.glob(path + extension))
+    for image_file in files:
+        for i in range(0, 9):
+            image = cv2.imread(image_file)
+            height, width, _ = image.shape
+            x = random.randint(0, width - 64)
+            y = random.randint(0, height - 128)
+            crop_img = image[y:y + 128, x:x + 64]
+            cv2.imwrite(".\img_inria\/crop%d_%s" % (i, os.path.basename(image_file)), crop_img)
+
+
+# get positive images from inria dataset
+def getPosImg():
+    extensions = ("*.jpg", "*.png")
+    path = "C:\Users\gonza\Downloads\INRIAPerson\96X160H96\Train\pos\/"
+    files = []
+    for extension in extensions:
+        files.extend(glob.glob(path + extension))
+    for image_file in files:
+        image = cv2.imread(image_file)
+        height, width, _ = image.shape
+        crop_img = image[16:height - 16, 16:width - 16]
+        cv2.imwrite(".\img_inria_pos\/crop_%s" % os.path.basename(image_file), crop_img)
+
+
 def testImg():
     svm = cv2.ml.SVM_load(".\svm.xml")
     for file in glob.glob(".\/test\pos\*.png"):
@@ -136,10 +210,8 @@ def testImg():
 
 
 def projectData(img_descriptor):
-    # mean = np.load("./pca_mean")
+    # mean = np.load("./pca_mean.npy")
     eigenvectors = np.load("./pca_eigenvectors.npy")
     mean = np.mean(img_descriptor, axis=0).reshape(1, -1)
     return cv2.PCAProject(img_descriptor, mean, eigenvectors)
 
-
-trainInitialSVM()
